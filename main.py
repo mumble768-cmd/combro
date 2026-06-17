@@ -1,210 +1,176 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import io
 
-st.set_page_config(
-    page_title="Mine Planner Pro Dashboard",
-    page_icon="⛏️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Mine Planner God-Tier", page_icon="⚙️", layout="wide")
 
-# === CSS PREMIUM ===
+# === CSS Biar Makin Sangar ===
 st.markdown("""
 <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-   .main > div {padding-top: 1rem;}
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
+  .main > div {padding-top: 1rem;}
     h1 {
         background: linear-gradient(90deg, #FF4B4B 0%, #FF9068 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         font-weight: 800; text-align: center;
     }
     [data-testid="stMetric"] {
-        background: #1E1E1E;
-        border: 1px solid #333;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        background: #1E1E1E; border: 1px solid #333; padding: 20px;
+        border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    [data-testid="stSidebar"] {background: #0E1117;}
-   .stTabs [data-baseweb="tab-list"] {gap: 8px;}
-   .stTabs [data-baseweb="tab"] {
-        background-color: #262730;
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-    }
+  .stTabs [data-baseweb="tab"] {background-color: #262730; border-radius: 8px 8px 0 0;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("⛏️ Mine Planner Pro Dashboard")
-st.caption("Upload data mentah Excel → Auto jadi analisa & planning breakdown")
+st.title("⚙️ Mine Planner God-Tier Dashboard")
+st.caption("MAR | MTTR | MTBF | PICA | Akurasi Service → Auto dari Excel mentah")
 
 # === SIDEBAR ===
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/4359/4359963.png", width=100)
-    st.header("📁 Control Panel")
-    uploaded_file = st.file_uploader("Upload Daily BD Excel (.xlsx)", type=["xlsx"])
+    st.image("https://cdn-icons-png.flaticon.com/512/4359/4359963.png", width=80)
+    st.header("📁 Data Input")
+    bd_file = st.file_uploader("1. Upload Daily BD Excel", type=["xlsx"])
+    oh_file = st.file_uploader("2. Upload Calendar & OH Excel", type=["xlsx"], help="Wajib buat hitung MAR/MTBF")
     st.markdown("---")
-    st.info("**Tips:** Pastikan Excel ada kolom: Code Number, Unit Model, Start Job, Problem Description, Type B/D")
+    st.info("**Rumus Dipake:**\n\n- **MAR** = OH / Calendar Hours\n- **MTTR** = Total Repair Time / Frek BD\n- **MTBF** = Operating Hours / Frek BD\n- **Akurasi Service** = OnTime Service / Total Service")
 
-@st.cache_data(show_spinner="Processing data...")
-def load_and_clean(file):
+@st.cache_data
+def load_bd(file):
     df = pd.read_excel(file)
-    df.columns = [c.strip().replace("\n", " ") for c in df.columns]
-    df = df.fillna('')
-    
-    # Auto convert date
-    date_cols = [c for c in df.columns if any(k in c.lower() for k in ['date', 'start', 'finish', 'tgl'])]
-    for col in date_cols:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
-    
-    # Auto convert numeric
-    num_cols = ['Aging', 'HM/KM', 'Downtime', 'MTTR', 'MTBF']
-    for col in num_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-    # Hitung Duration kalo ada Start & Finish
+    df.columns = [c.strip() for c in df.columns]
+    for col in ['Start Job', 'Finish Job', 'Plan Start', 'Plan Finish']:
+        if col in df.columns: df[col] = pd.to_datetime(df[col], errors='coerce')
     if 'Start Job' in df.columns and 'Finish Job' in df.columns:
-        df['Duration (Hours)'] = (df['Finish Job'] - df['Start Job']).dt.total_seconds() / 3600
-    
-    return df, date_cols
+        df['Downtime'] = (df['Finish Job'] - df['Start Job']).dt.total_seconds() / 3600
+    return df.fillna('')
 
-if uploaded_file:
-    df, date_cols = load_and_clean(uploaded_file)
-    df_filtered = df.copy()
+@st.cache_data
+def load_oh(file):
+    df = pd.read_excel(file)
+    df.columns = [c.strip() for c in df.columns]
+    if 'Tanggal' in df.columns: df['Tanggal'] = pd.to_datetime(df['Tanggal'])
+    return df
 
-    # === FILTER PINTAR ===
+if bd_file:
+    df_bd = load_bd(bd_file)
+    df_oh = load_oh(oh_file) if oh_file else pd.DataFrame()
+
+    # === FILTER ===
     with st.sidebar:
-        st.subheader("🔍 Smart Filter")
-        if date_cols:
-            main_date = st.selectbox("Kolom Tanggal Utama", date_cols, index=0)
-            min_d, max_d = df[main_date].min(), df[main_date].max()
-            if pd.notna(min_d):
-                date_range = st.date_input("Rentang Tanggal", (min_d, max_d), min_d, max_d)
-                if len(date_range) == 2:
-                    start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1]) + timedelta(days=1)
-                    df_filtered = df_filtered[(df_filtered[main_date] >= start) & (df_filtered[main_date] < end)]
-
-        for col in ['Site', 'Category Unit', 'Type B/D', 'Sts B/D', 'Unit Model', 'Section']:
-            if col in df.columns:
-                opts = sorted([x for x in df[col].unique() if x])
-                sel = st.multiselect(col, opts)
-                if sel: df_filtered = df_filtered[df_filtered[col].isin(sel)]
+        st.subheader("🔍 Filter")
+        if 'Start Job' in df_bd:
+            min_d, max_d = df_bd['Start Job'].min().date(), df_bd['Start Job'].max().date()
+            date_range = st.date_input("Periode Analisa", (min_d, max_d), min_d, max_d)
+            if len(date_range) == 2:
+                start, end = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1]) + timedelta(days=1)
+                df_bd = df_bd[(df_bd['Start Job'] >= start) & (df_bd['Start Job'] < end)]
+                if not df_oh.empty: df_oh = df_oh[(df_oh['Tanggal'] >= start) & (df_oh['Tanggal'] < end)]
         
-        st.success(f"Data aktif: {len(df_filtered):,} baris")
+        unit_list = sorted(df_bd['Code Number'].unique()) if 'Code Number' in df_bd else []
+        sel_unit = st.multiselect("Filter Unit", unit_list)
+        if sel_unit: 
+            df_bd = df_bd[df_bd['Code Number'].isin(sel_unit)]
+            if not df_oh.empty: df_oh = df_oh[df_oh['Unit'].isin(sel_unit)]
+
+    # === HITUNG KPI GOD-TIER ===
+    total_bd = len(df_bd)
+    total_dt = df_bd['Downtime'].sum() if 'Downtime' in df_bd else 0
+    mttr = total_dt / total_bd if total_bd > 0 else 0
+    
+    # MAR & MTBF butuh data OH
+    if not df_oh.empty and 'Operating Hours' in df_oh and 'Calendar Hours' in df_oh:
+        total_oh = df_oh['Operating Hours'].sum()
+        total_ch = df_oh['Calendar Hours'].sum()
+        mar = (total_oh / total_ch * 100) if total_ch > 0 else 0
+        mtbf = (total_oh / total_bd) if total_bd > 0 else 0
+    else:
+        total_oh, mar, mtbf = 0, 0, 0
+
+    # Akurasi Service: Asumsi ada kolom 'Plan Finish' vs 'Finish Job'
+    if 'Plan Finish' in df_bd and 'Finish Job' in df_bd:
+        ontime = df_bd[df_bd['Finish Job'] <= df_bd['Plan Finish']]
+        akurasi = (len(ontime) / total_bd * 100) if total_bd > 0 else 0
+    else:
+        akurasi = 0
+
+    # === TABS ===
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 KPI Maintenance", "🔧 PICA Analysis", "📈 Trend & Forecast", "📋 Data"])
+
+    with tab1:
+        st.subheader("KPI Level Manager")
+        c1,c2,c3,c4,c5 = st.columns(5)
+        c1.metric("MAR %", f"{mar:.2f}%", help="Mechanical Availability Ratio = OH / Calendar Hours. Target >90%")
+        c2.metric("MTTR", f"{mttr:.1f} Jam", help="Mean Time To Repair = Total DT / Frek BD. Makin kecil makin bagus")
+        c3.metric("MTBF", f"{mtbf:.0f} Jam", help="Mean Time Between Failure = OH / Frek BD. Makin besar makin bagus")
+        c4.metric("Akurasi Service", f"{akurasi:.1f}%", help="Job selesai tepat waktu vs plan. Target >95%")
+        c5.metric("Total Downtime", f"{total_dt:,.0f} Jam")
+
         st.markdown("---")
-        st.metric("Periode Data", f"{df_filtered[main_date].min().date()} s/d {df_filtered[main_date].max().date()}" if date_cols else "-")
-
-    # === TABS UTAMA PLANNER ===
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Executive Summary", "🔧 Maintenance Analysis", "📈 Planning & Forecast", "📋 Raw Data"])
-
-    with tab1: # EXECUTIVE SUMMARY
-        st.subheader("KPI Utama Planner")
-        k1, k2, k3, k4, k5 = st.columns(5)
-        
-        total_bd = len(df_filtered)
-        k1.metric("Total Breakdown", f"{total_bd:,}", help="Jumlah kejadian BD periode ini")
-        
-        unique_unit = df_filtered['Code Number'].nunique() if 'Code Number' in df_filtered else 0
-        k2.metric("Unit Terdampak", unique_unit)
-        
-        if 'Duration (Hours)' in df_filtered:
-            total_dt = df_filtered['Duration (Hours)'].sum()
-            k3.metric("Total Downtime", f"{total_dt:,.0f} Jam")
-            avg_dt = df_filtered['Duration (Hours)'].mean()
-            k4.metric("Avg Downtime", f"{avg_dt:.1f} Jam")
-        
-        if 'Aging' in df_filtered:
-            avg_aging = df_filtered['Aging'].mean()
-            k5.metric("Avg Aging BD", f"{avg_aging:.1f} Hari", delta=f"{avg_aging-7:.1f} vs target 7 hari", delta_color="inverse")
-
-        st.markdown("---")
-        c1, c2 = st.columns([2,1])
-        with c1:
-            if main_date in df_filtered:
-                daily = df_filtered.groupby(df_filtered[main_date].dt.date).size().reset_index(name='Jumlah BD')
-                fig = px.area(daily, x=main_date, y='Jumlah BD', title='Trend Breakdown Harian', template="plotly_dark", markers=True)
-                st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            if 'Type B/D' in df_filtered:
-                fig2 = px.pie(df_filtered, names='Type B/D', title='Komposisi Type BD', hole=.5, template="plotly_dark")
-                st.plotly_chart(fig2, use_container_width=True)
-
-    with tab2: # MAINTENANCE ANALYSIS
-        st.subheader("Analisa Akar Masalah")
         c1, c2 = st.columns(2)
-        with c1:
-            if 'Problem Description' in df_filtered:
-                top_prob = df_filtered['Problem Description'].value_counts().nlargest(10).reset_index()
-                fig = px.bar(top_prob, y='Problem Description', x='count', orientation='h', title='Top 10 Problem Berulang',
-                             template="plotly_dark", text='count', color='count', color_continuous_scale='Reds')
-                fig.update_layout(yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            if 'Code Number' in df_filtered:
-                top_unit = df_filtered['Code Number'].value_counts().nlargest(10).reset_index()
-                fig = px.bar(top_unit, x='Code Number', y='count', title='Top 10 Unit Paling Rewel',
-                             template="plotly_dark", text='count', color='count', color_continuous_scale='Oranges')
-                st.plotly_chart(fig, use_container_width=True)
-        
-        if 'Unit Model' in df_filtered and 'Problem Description' in df_filtered:
-            st.subheader("Heatmap Problem vs Unit Model")
-            heatmap_data = pd.crosstab(df_filtered['Unit Model'], df_filtered['Problem Description'])
-            fig = px.imshow(heatmap_data, text_auto=True, aspect="auto", template="plotly_dark",
-                            color_continuous_scale='Reds', title='Unit mana sering kena problem apa')
+        with c1: # Gauge MAR
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number", value=mar, domain={'x': [0, 1], 'y': [0, 1]},
+                title={'text': "MAR %"}, gauge={
+                    'axis': {'range': [None, 100]}, 'bar': {'color': "#FF4B4B"},
+                    'steps': [{'range': [0, 80], 'color': "#450a0a"}, {'range': [80, 90], 'color': "#854d0e"}, {'range': [90, 100], 'color': "#14532d"}],
+                    'threshold': {'line': {'color': "white", 'width': 4}, 'thickness': 0.75, 'value': 90}}))
+            fig.update_layout(template="plotly_dark", height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        with c2: # MTTR vs MTBF
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name='MTTR', x=['Current'], y=[mttr], marker_color='#FF4B4B'))
+            fig.add_trace(go.Bar(name='MTBF', x=['Current'], y=[mtbf], marker_color='#00CC96'))
+            fig.update_layout(template="plotly_dark", title="MTTR vs MTBF", barmode='group', height=300)
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab3: # PLANNING & FORECAST
-        st.subheader("Tools Buat Planning")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**1. Pareto Problem 80/20**")
-            if 'Problem Description' in df_filtered:
-                prob_count = df_filtered['Problem Description'].value_counts().reset_index()
-                prob_count['cumperc'] = prob_count['count'].cumsum() / prob_count['count'].sum() * 100
-                fig = go.Figure()
-                fig.add_trace(go.Bar(x=prob_count['Problem Description'][:15], y=prob_count['count'][:15], name='Jumlah', marker_color='#FF4B4B'))
-                fig.add_trace(go.Scatter(x=prob_count['Problem Description'][:15], y=prob_count['cumperc'][:15], name='Kumulatif %', yaxis='y2', line=dict(color='#00CC96')))
-                fig.update_layout(template="plotly_dark", yaxis2=dict(overlaying='y', side='right', range=[0,100]),
-                                  title="Fokus ke 20% problem ini untuk selesaikan 80% BD")
-                st.plotly_chart(fig, use_container_width=True)
+    with tab2:
+        st.subheader("PICA - Problem Identification & Corrective Action")
+        st.write("**1. Pareto Problem 80/20** → Fokus ke 20% problem yang sebabkan 80% downtime")
+        if 'Problem Description' in df_bd and 'Downtime' in df_bd:
+            pareto = df_bd.groupby('Problem Description')['Downtime'].sum().sort_values(ascending=False).reset_index()
+            pareto['cumperc'] = pareto['Downtime'].cumsum() / pareto['Downtime'].sum() * 100
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=pareto['Problem Description'][:10], y=pareto['Downtime'][:10], name='Downtime Jam', marker_color='#FF4B4B'))
+            fig.add_trace(go.Scatter(x=pareto['Problem Description'][:10], y=pareto['cumperc'][:10], name='Kumulatif %', yaxis='y2', line=dict(color='white')))
+            fig.update_layout(template="plotly_dark", yaxis2=dict(overlaying='y', side='right', range=[0,100]), title="Problem Mana yg Bikin Rugi Jam Paling Banyak?")
+            st.plotly_chart(fig, use_container_width=True)
         
-        with c2:
-            st.write("**2. Aging Breakdown Monitor**")
-            if 'Aging' in df_filtered and 'Sts B/D' in df_filtered:
-                aging_open = df_filtered[df_filtered['Sts B/D'].str.contains('Open|Progress', na=False)]
-                if not aging_open.empty:
-                    fig = px.histogram(aging_open, x='Aging', nbins=20, title='Distribusi Aging BD yang Masih Open', template="plotly_dark")
-                    fig.add_vline(x=7, line_dash="dash", line_color="yellow", annotation_text="Target 7 Hari")
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.success("Keren! Tidak ada BD yang masih Open.")
-        
-        st.write("**3. Rekomendasi Planner Otomatis**")
-        if 'Problem Description' in df_filtered:
-            top3_prob = df_filtered['Problem Description'].value_counts().nlargest(3).index.tolist()
-            st.warning(f"**Fokus Minggu Ini:** Siapkan part & manpower untuk problem: 1. {top3_prob[0] if len(top3_prob)>0 else '-'}, 2. {top3_prob[1] if len(top3_prob)>1 else '-'}, 3. {top3_prob[2] if len(top3_prob)>2 else '-'}")
-        if 'Aging' in df_filtered:
-            critical_aging = df_filtered[df_filtered['Aging'] > 14]
-            if not critical_aging.empty:
-                st.error(f"**PERHATIAN:** Ada {len(critical_aging)} unit dengan Aging > 14 hari. Segera eskalasi!")
-                st.dataframe(critical_aging[['Code Number', 'Unit Model', 'Problem Description', 'Aging']], use_container_width=True)
+        st.write("**2. Top Unit by Downtime** → Unit mana yg harus jadi prioritas PM")
+        if 'Code Number' in df_bd and 'Downtime' in df_bd:
+            unit_dt = df_bd.groupby('Code Number')['Downtime'].sum().sort_values(ascending=False).head(10).reset_index()
+            fig = px.bar(unit_dt, x='Code Number', y='Downtime', text='Downtime', template="plotly_dark", color='Downtime', color_continuous_scale='Reds')
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.write("**3. Corrective Action Tracker**")
+        st.warning("**Rekomendasi Otomatis:**")
+        if 'Problem Description' in df_bd:
+            top_prob_dt = df_bd.groupby('Problem Description')['Downtime'].sum().idxmax()
+            st.write(f"1. **Fokus Problem:** `{top_prob_dt}` karena menyumbang downtime terbesar. Cek root cause & ketersediaan part.")
+        if mttr > 8:
+            st.write(f"2. **MTTR Tinggi:** {mttr:.1f} Jam. Evaluasi kompetensi mekanik, ketersediaan tools, atau SOP repair.")
+        if mar < 90 and mar > 0:
+            st.write(f"3. **MAR Rendah:** {mar:.2f}%. Tingkatkan PM compliance & percepat eksekusi BD.")
+
+    with tab3:
+        st.subheader("Trend Analysis Buat Planning")
+        if not df_oh.empty:
+            daily = df_oh.groupby('Tanggal').agg({'Operating Hours':'sum', 'Calendar Hours':'sum'}).reset_index()
+            daily['MAR'] = daily['Operating Hours'] / daily['Calendar Hours'] * 100
+            fig = px.line(daily, x='Tanggal', y='MAR', title='Trend MAR Harian', template="plotly_dark", markers=True)
+            fig.add_hline(y=90, line_dash="dash", line_color="green", annotation_text="Target 90%")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.error("Upload file Calendar & OH buat lihat trend MAR/MTBF")
 
     with tab4:
-        st.dataframe(df_filtered, use_container_width=True, height=600)
-        def to_excel(df):
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False, sheet_name='Filtered')
-            return output.getvalue()
-        st.download_button("📥 Download Data Filter", to_excel(df_filtered), f"BD_Filter_{datetime.now().strftime('%Y%m%d')}.xlsx", use_container_width=True)
+        st.dataframe(df_bd, use_container_width=True)
+        if not df_oh.empty:
+            st.write("Data Operating Hours")
+            st.dataframe(df_oh, use_container_width=True)
 
 else:
-    st.warning("👈 Upload file Excel Daily Breakdown dulu di sidebar")
-    st.image("https://i.imgur.com/gJtT4lD.png")
+    st.warning("👈 Upload 2 file: 1. Daily BD, 2. Calendar & OH buat unlock semua KPI")
