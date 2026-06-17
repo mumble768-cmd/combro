@@ -12,7 +12,7 @@ st.set_page_config(page_title="Mine Planner God-Tier", page_icon="⚙️", layou
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-  .main > div {padding-top: 1rem;}
+   .main > div {padding-top: 1rem;}
     h1 {
         background: linear-gradient(90deg, #FF4B4B 0%, #FF9068 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -22,7 +22,7 @@ st.markdown("""
         background: #1E1E1E; border: 1px solid #333; padding: 20px;
         border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-  .stTabs [data-baseweb="tab"] {background-color: #262730; border-radius: 8px 8px 0 0;}
+   .stTabs [data-baseweb="tab"] {background-color: #262730; border-radius: 8px 8px 0 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,7 +74,7 @@ if bd_file:
         sel_unit = st.multiselect("Filter Unit", unit_list)
         if sel_unit: 
             df_bd = df_bd[df_bd['Code Number'].isin(sel_unit)]
-            if not df_oh.empty: df_oh = df_oh[df_oh['Unit'].isin(sel_unit)]
+            if not df_oh.empty and 'Unit' in df_oh.columns: df_oh = df_oh[df_oh['Unit'].isin(sel_unit)]
 
     # === HITUNG KPI GOD-TIER ===
     total_bd = len(df_bd)
@@ -98,7 +98,7 @@ if bd_file:
         akurasi = 0
 
     # === TABS ===
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 KPI Maintenance", "🔧 PICA Analysis", "📈 Trend & Forecast", "📋 Data"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 KPI Maintenance", "🔧 PICA Analysis", "📈 Trend & Forecast", "📋 Data", "📝 PICA Tracker"])
 
     with tab1:
         st.subheader("KPI Level Manager")
@@ -118,13 +118,13 @@ if bd_file:
                     'axis': {'range': [None, 100]}, 'bar': {'color': "#FF4B4B"},
                     'steps': [{'range': [0, 80], 'color': "#450a0a"}, {'range': [80, 90], 'color': "#854d0e"}, {'range': [90, 100], 'color': "#14532d"}],
                     'threshold': {'line': {'color': "white", 'width': 4}, 'thickness': 0.75, 'value': 90}}))
-            fig.update_layout(template="plotly_dark", height=300)
+            fig.update_layout(template="plotly_dark", height=300, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig, use_container_width=True)
         with c2: # MTTR vs MTBF
             fig = go.Figure()
             fig.add_trace(go.Bar(name='MTTR', x=['Current'], y=[mttr], marker_color='#FF4B4B'))
             fig.add_trace(go.Bar(name='MTBF', x=['Current'], y=[mtbf], marker_color='#00CC96'))
-            fig.update_layout(template="plotly_dark", title="MTTR vs MTBF", barmode='group', height=300)
+            fig.update_layout(template="plotly_dark", title="MTTR vs MTBF", barmode='group', height=300, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
@@ -147,7 +147,7 @@ if bd_file:
 
         st.write("**3. Corrective Action Tracker**")
         st.warning("**Rekomendasi Otomatis:**")
-        if 'Problem Description' in df_bd:
+        if 'Problem Description' in df_bd and total_dt > 0:
             top_prob_dt = df_bd.groupby('Problem Description')['Downtime'].sum().idxmax()
             st.write(f"1. **Fokus Problem:** `{top_prob_dt}` karena menyumbang downtime terbesar. Cek root cause & ketersediaan part.")
         if mttr > 8:
@@ -157,7 +157,7 @@ if bd_file:
 
     with tab3:
         st.subheader("Trend Analysis Buat Planning")
-        if not df_oh.empty:
+        if not df_oh.empty and 'Tanggal' in df_oh:
             daily = df_oh.groupby('Tanggal').agg({'Operating Hours':'sum', 'Calendar Hours':'sum'}).reset_index()
             daily['MAR'] = daily['Operating Hours'] / daily['Calendar Hours'] * 100
             fig = px.line(daily, x='Tanggal', y='MAR', title='Trend MAR Harian', template="plotly_dark", markers=True)
@@ -171,6 +171,108 @@ if bd_file:
         if not df_oh.empty:
             st.write("Data Operating Hours")
             st.dataframe(df_oh, use_container_width=True)
+
+    with tab5:
+        st.subheader("📝 PICA - Live Action Plan")
+        st.caption("Input Root Cause & Corrective Action langsung dari dashboard. Data bisa di-download.")
+
+        # Inisialisasi database PICA di session
+        if 'pica_db' not in st.session_state:
+            st.session_state.pica_db = pd.DataFrame(columns=[
+                'Tanggal', 'Unit', 'Problem', 'Root Cause', 'Corrective Action', 'PIC', 'Due Date', 'Status'
+            ])
+
+        # === FORM INPUT PICA ===
+        with st.form("pica_form", clear_on_submit=True):
+            st.write("**Input PICA Baru**")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                p_unit = st.selectbox("Pilih Unit", options=[''] + unit_list, key="pica_unit")
+                prob_list = sorted(df_bd['Problem Description'].unique()) if 'Problem Description' in df_bd else []
+                p_prob = st.selectbox("Pilih Problem", options=[''] + prob_list, key="pica_prob")
+            with c2:
+                p_rca = st.text_area("Root Cause Analysis", placeholder="Kenapa bisa rusak? 5-Why Analysis...")
+                p_pic = st.text_input("PIC", placeholder="Nama Mekanik/Spv")
+            with c3:
+                p_ca = st.text_area("Corrective Action", placeholder="Apa tindakan biar nggak kejadian lagi?")
+                p_due = st.date_input("Due Date", value=datetime.now() + timedelta(days=7))
+            
+            submitted = st.form_submit_button("💾 Simpan PICA", use_container_width=True)
+            if submitted:
+                if p_unit and p_prob and p_rca and p_ca and p_pic:
+                    new_pica = pd.DataFrame([{
+                        'Tanggal': datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        'Unit': p_unit,
+                        'Problem': p_prob,
+                        'Root Cause': p_rca,
+                        'Corrective Action': p_ca,
+                        'PIC': p_pic,
+                        'Due Date': p_due.strftime("%Y-%m-%d"),
+                        'Status': 'Open'
+                    }])
+                    st.session_state.pica_db = pd.concat([st.session_state.pica_db, new_pica], ignore_index=True)
+                    st.success(f"PICA untuk {p_unit} - {p_prob} berhasil disimpan!")
+                    st.balloons()
+                else:
+                    st.error("Wajib isi semua kolom bro!")
+
+        st.markdown("---")
+        
+        # === TABEL PICA LIVE ===
+        st.write("**Database PICA**")
+        if not st.session_state.pica_db.empty:
+            # Filter & Edit Status
+            c1, c2, c3 = st.columns([2,2,1])
+            with c1:
+                filter_status = st.selectbox("Filter Status", ['All', 'Open', 'In Progress', 'Closed'])
+            with c2:
+                filter_pic = st.selectbox("Filter PIC", ['All'] + sorted(st.session_state.pica_db['PIC'].unique()))
+            
+            df_display = st.session_state.pica_db.copy()
+            if filter_status!= 'All':
+                df_display = df_display[df_display['Status'] == filter_status]
+            if filter_pic!= 'All':
+                df_display = df_display[df_display['PIC'] == filter_pic]
+
+            # Tampilan tabel + edit status
+            edited_df = st.data_editor(
+                df_display,
+                column_config={
+                    "Status": st.column_config.SelectboxColumn("Status", options=['Open', 'In Progress', 'Closed'], required=True),
+                    "Due Date": st.column_config.DateColumn("Due Date", format="YYYY-MM-DD"),
+                },
+                use_container_width=True,
+                hide_index=True,
+                num_rows="dynamic"
+            )
+            
+            # Update database kalo ada perubahan status
+            if not edited_df.equals(df_display):
+                for idx, row in edited_df.iterrows():
+                    mask = (st.session_state.pica_db['Tanggal'] == row['Tanggal']) & (st.session_state.pica_db['Unit'] == row['Unit'])
+                    st.session_state.pica_db.loc[mask, 'Status'] = row['Status']
+                st.toast("Status PICA berhasil di-update!")
+
+            # KPI PICA
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Total PICA Open", len(st.session_state.pica_db[st.session_state.pica_db['Status'] == 'Open']))
+            overdue = st.session_state.pica_db[
+                (st.session_state.pica_db['Status']!= 'Closed') & 
+                (pd.to_datetime(st.session_state.pica_db['Due Date']) < datetime.now())
+            ]
+            k2.metric("PICA Overdue", len(overdue), delta=f"{len(overdue)} case", delta_color="inverse")
+            k3.metric("Completion Rate", f"{len(st.session_state.pica_db[st.session_state.pica_db['Status']=='Closed'])/len(st.session_state.pica_db)*100:.0f}%" if len(st.session_state.pica_db)>0 else "0%")
+
+            # Download
+            def to_excel_pica(df):
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df.to_excel(writer, index=False, sheet_name='PICA')
+                return output.getvalue()
+            st.download_button("📥 Download Database PICA", to_excel_pica(st.session_state.pica_db), f"PICA_{datetime.now().strftime('%Y%m%d')}.xlsx", use_container_width=True)
+        
+        else:
+            st.info("Belum ada data PICA. Input form di atas dulu bro.")
 
 else:
     st.warning("👈 Upload 2 file: 1. Daily BD, 2. Calendar & OH buat unlock semua KPI")
