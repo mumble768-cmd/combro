@@ -8,11 +8,10 @@ import io
 
 st.set_page_config(page_title="Mine Planner God-Tier", page_icon="⚙️", layout="wide")
 
-# === CSS Biar Makin Sangar ===
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-   .main > div {padding-top: 1rem;}
+  .main > div {padding-top: 1rem;}
     h1 {
         background: linear-gradient(90deg, #FF4B4B 0%, #FF9068 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -22,14 +21,13 @@ st.markdown("""
         background: #1E1E1E; border: 1px solid #333; padding: 20px;
         border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-   .stTabs [data-baseweb="tab"] {background-color: #262730; border-radius: 8px 8px 0 0;}
+  .stTabs [data-baseweb="tab"] {background-color: #262730; border-radius: 8px 8px 0 0;}
 </style>
 """, unsafe_allow_html=True)
 
 st.title("⚙️ Mine Planner God-Tier Dashboard")
 st.caption("MAR | MTTR | MTBF | PICA | Akurasi Service → Auto dari Excel mentah")
 
-# === SIDEBAR ===
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/4359/4359963.png", width=80)
     st.header("📁 Data Input")
@@ -59,7 +57,6 @@ if bd_file:
     df_bd = load_bd(bd_file)
     df_oh = load_oh(oh_file) if oh_file else pd.DataFrame()
 
-    # === FILTER ===
     with st.sidebar:
         st.subheader("🔍 Filter")
         if 'Start Job' in df_bd:
@@ -76,12 +73,10 @@ if bd_file:
             df_bd = df_bd[df_bd['Code Number'].isin(sel_unit)]
             if not df_oh.empty and 'Unit' in df_oh.columns: df_oh = df_oh[df_oh['Unit'].isin(sel_unit)]
 
-    # === HITUNG KPI GOD-TIER ===
     total_bd = len(df_bd)
     total_dt = df_bd['Downtime'].sum() if 'Downtime' in df_bd else 0
     mttr = total_dt / total_bd if total_bd > 0 else 0
     
-    # MAR & MTBF butuh data OH
     if not df_oh.empty and 'Operating Hours' in df_oh and 'Calendar Hours' in df_oh:
         total_oh = df_oh['Operating Hours'].sum()
         total_ch = df_oh['Calendar Hours'].sum()
@@ -90,14 +85,12 @@ if bd_file:
     else:
         total_oh, mar, mtbf = 0, 0, 0
 
-    # Akurasi Service: Asumsi ada kolom 'Plan Finish' vs 'Finish Job'
     if 'Plan Finish' in df_bd and 'Finish Job' in df_bd:
         ontime = df_bd[df_bd['Finish Job'] <= df_bd['Plan Finish']]
         akurasi = (len(ontime) / total_bd * 100) if total_bd > 0 else 0
     else:
         akurasi = 0
 
-    # === TABS ===
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 KPI Maintenance", "🔧 PICA Analysis", "📈 Trend & Forecast", "📋 Data", "📝 PICA Tracker"])
 
     with tab1:
@@ -111,7 +104,7 @@ if bd_file:
 
         st.markdown("---")
         c1, c2 = st.columns(2)
-        with c1: # Gauge MAR
+        with c1:
             fig = go.Figure(go.Indicator(
                 mode="gauge+number", value=mar, domain={'x': [0, 1], 'y': [0, 1]},
                 title={'text': "MAR %"}, gauge={
@@ -120,7 +113,7 @@ if bd_file:
                     'threshold': {'line': {'color': "white", 'width': 4}, 'thickness': 0.75, 'value': 90}}))
             fig.update_layout(template="plotly_dark", height=300, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig, use_container_width=True)
-        with c2: # MTTR vs MTBF
+        with c2:
             fig = go.Figure()
             fig.add_trace(go.Bar(name='MTTR', x=['Current'], y=[mttr], marker_color='#FF4B4B'))
             fig.add_trace(go.Bar(name='MTBF', x=['Current'], y=[mtbf], marker_color='#00CC96'))
@@ -176,13 +169,11 @@ if bd_file:
         st.subheader("📝 PICA - Live Action Plan")
         st.caption("Input Root Cause & Corrective Action langsung dari dashboard. Data bisa di-download.")
 
-        # Inisialisasi database PICA di session
         if 'pica_db' not in st.session_state:
             st.session_state.pica_db = pd.DataFrame(columns=[
                 'Tanggal', 'Unit', 'Problem', 'Root Cause', 'Corrective Action', 'PIC', 'Due Date', 'Status'
             ])
 
-        # === FORM INPUT PICA ===
         with st.form("pica_form", clear_on_submit=True):
             st.write("**Input PICA Baru**")
             c1, c2, c3 = st.columns(3)
@@ -218,10 +209,8 @@ if bd_file:
 
         st.markdown("---")
         
-        # === TABEL PICA LIVE ===
         st.write("**Database PICA**")
         if not st.session_state.pica_db.empty:
-            # Filter & Edit Status
             c1, c2, c3 = st.columns([2,2,1])
             with c1:
                 filter_status = st.selectbox("Filter Status", ['All', 'Open', 'In Progress', 'Closed'])
@@ -234,7 +223,6 @@ if bd_file:
             if filter_pic!= 'All':
                 df_display = df_display[df_display['PIC'] == filter_pic]
 
-            # Tampilan tabel + edit status
             edited_df = st.data_editor(
                 df_display,
                 column_config={
@@ -246,14 +234,12 @@ if bd_file:
                 num_rows="dynamic"
             )
             
-            # Update database kalo ada perubahan status
             if not edited_df.equals(df_display):
                 for idx, row in edited_df.iterrows():
                     mask = (st.session_state.pica_db['Tanggal'] == row['Tanggal']) & (st.session_state.pica_db['Unit'] == row['Unit'])
                     st.session_state.pica_db.loc[mask, 'Status'] = row['Status']
                 st.toast("Status PICA berhasil di-update!")
 
-            # KPI PICA
             k1, k2, k3 = st.columns(3)
             k1.metric("Total PICA Open", len(st.session_state.pica_db[st.session_state.pica_db['Status'] == 'Open']))
             overdue = st.session_state.pica_db[
@@ -263,7 +249,6 @@ if bd_file:
             k2.metric("PICA Overdue", len(overdue), delta=f"{len(overdue)} case", delta_color="inverse")
             k3.metric("Completion Rate", f"{len(st.session_state.pica_db[st.session_state.pica_db['Status']=='Closed'])/len(st.session_state.pica_db)*100:.0f}%" if len(st.session_state.pica_db)>0 else "0%")
 
-            # Download
             def to_excel_pica(df):
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -273,7 +258,6 @@ if bd_file:
         
         else:
             st.info("Belum ada data PICA. Input form di atas dulu bro.")
-            Commit message: upgrade V5: PICA Tracker
 
 else:
     st.warning("👈 Upload 2 file: 1. Daily BD, 2. Calendar & OH buat unlock semua KPI")
