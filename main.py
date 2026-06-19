@@ -149,6 +149,52 @@ if bd_file:
             st.write(f"3. **MAR Rendah:** {mar:.2f}%. Tingkatkan PM compliance & percepat eksekusi BD.")
 
     with tab3:
+        st.subheader("🔧 Mechanic Activity & Effectiveness Report")
+        if 'Mechanic Name' in df_bd and 'Job Type' in df_bd and 'Downtime' in df_bd:
+            
+            # 1. PECAH NAMA MEKANIK YG DIPISAH KOMA
+            df_mech = df_bd.copy()
+            df_mech['Mechanic Name'] = df_mech['Mechanic Name'].str.split(',')
+            df_mech = df_mech.explode('Mechanic Name')
+            df_mech['Mechanic Name'] = df_mech['Mechanic Name'].str.strip()
+            df_mech = df_mech[df_mech['Mechanic Name']!= '']
+
+            # 2. PRODUCTIVITY PER MEKANIK
+            mech_sum = df_mech.groupby('Mechanic Name').agg(
+                Total_Job=('Code Number', 'count'),
+                Total_Hours=('Downtime', 'sum'),
+                Avg_Hours=('Downtime', 'mean'),
+                BD_Count=('Job Type', lambda x: (x == 'BD').sum()),
+                PM_Count=('Job Type', lambda x: (x == 'PM').sum())
+            ).reset_index().sort_values('Total_Hours', ascending=False)
+
+            hari_kerja = df_bd['Start Job'].dt.date.nunique()
+            mech_sum['Hours_per_Day'] = mech_sum['Total_Hours'] / hari_kerja if hari_kerja > 0 else 0
+
+            st.write("**1. Productivity Mekanik - Man Hours**")
+            st.caption("Kalo 1 job dikerjain 3 orang selama 4 jam, masing-masing dapet 4 jam")
+            st.dataframe(mech_sum, use_container_width=True, hide_index=True)
+
+            c1, c2 = st.columns(2)
+            with c1:
+                fig = px.bar(mech_sum.head(10), x='Mechanic Name', y='Total_Hours', color='Total_Hours',
+                             template="plotly_dark", title="Top 10 Mekanik by Total Man-Hours",
+                             color_continuous_scale='Blues', text='Total_Hours')
+                fig.update_traces(texttemplate='%{text:.1f}h', textposition='outside')
+                st.plotly_chart(fig, use_container_width=True)
+            with c2:
+                if 'Wrench Time' in df_mech:
+                    wt_mech = df_mech.groupby('Mechanic Name')['Wrench Time'].mean().reset_index().sort_values('Wrench Time', ascending=False)
+                    fig = px.bar(wt_mech.head(10), x='Mechanic Name', y='Wrench Time', template="plotly_dark",
+                                 title="Wrench Time % per Mekanik", color='Wrench Time', color_continuous_scale='Greens',
+                                 text='Wrench Time')
+                    fig.add_hline(y=target_wt, line_dash="dash", line_color="yellow", annotation_text=f"Target {target_wt}%")
+                    fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                    st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.error("Tambahin kolom 'Mechanic Name' dan 'Job Type' di file Daily BD")
+
+    with tab4:
         st.subheader("Trend Analysis Buat Planning")
         if not df_oh.empty and 'Tanggal' in df_oh:
             daily = df_oh.groupby('Tanggal').agg({'Operating Hours':'sum', 'Calendar Hours':'sum'}).reset_index()
@@ -158,12 +204,6 @@ if bd_file:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.error("Upload file Calendar & OH buat lihat trend MAR/MTBF")
-
-    with tab4:
-        st.dataframe(df_bd, use_container_width=True)
-        if not df_oh.empty:
-            st.write("Data Operating Hours")
-            st.dataframe(df_oh, use_container_width=True)
 
     with tab5:
         st.subheader("📝 PICA - Live Action Plan")
