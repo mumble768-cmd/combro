@@ -66,32 +66,36 @@ if file_oh:
     st.dataframe(df_preview_oh)
     header_oh = c2.number_input("Header Timesheet di baris ke?", min_value=0, max_value=9, value=4, help="0 = baris pertama", key='oh_h')
     
-    if st.button("✅ Load Timesheet"):
-        df_oh = pd.read_excel(file_oh, sheet_name=sheet_oh, header=header_oh)
-        df_oh.columns = df_oh.columns.str.strip().str.upper()
-        
-        col_map_oh = {
-            'DATE':'Tanggal', 'TANGGAL':'Tanggal',
-            'NO UNIT':'Unit', 'UNIT NO':'Unit', 'UNIT':'Unit',
-            'TOTAL HM':'Operating Hours', 'HM':'Operating Hours', 'OH':'Operating Hours',
-            'MOH':'Calendar Hours', 'CH':'Calendar Hours',
-            'BD':'Breakdown Hours', 'BREAKDOWN':'Breakdown Hours'
-        }
-        df_oh = df_oh.rename(columns=col_map_oh)
-        
-        # Validasi kolom wajib
-        wajib = ['Tanggal', 'Unit', 'Operating Hours', 'Calendar Hours']
-        hilang = [k for k in wajib if k not in df_oh.columns]
-        if hilang:
-            st.error(f"Kolom wajib Timesheet nggak ada: {hilang}")
-            st.write("Kolom yg kebaca:", list(df_oh.columns))
-        else:
-            df_oh = df_oh.dropna(subset=['Tanggal', 'Unit'])
-            df_oh['Tanggal'] = pd.to_datetime(df_oh['Tanggal'], dayfirst=True, errors='coerce')
-            df_oh['Operating Hours'] = pd.to_numeric(df_oh['Operating Hours'], errors='coerce').fillna(0)
-            df_oh['Calendar Hours'] = pd.to_numeric(df_oh['Calendar Hours'], errors='coerce').fillna(24)
-            st.session_state['df_oh'] = df_oh
-            st.success(f"Timesheet OK! {len(df_oh)} baris loaded")
+   if st.button("✅ Load Timesheet"):
+    df_oh = pd.read_excel(file_oh, sheet_name=sheet_oh, header=header_oh)
+    df_oh.columns = df_oh.columns.str.strip().str.upper()
+    
+    col_map_oh = {
+        'DATE':'Tanggal', 'TANGGAL':'Tanggal',
+        'NO UNIT':'Unit', 'UNIT NO':'Unit', 'UNIT':'Unit',
+        'TOTAL':'Operating Hours', 'TOTAL HM':'Operating Hours', 'HM':'Operating Hours', 'OH':'Operating Hours',
+        'MOH':'Calendar Hours', 'CH':'Calendar Hours', 'CALENDAR':'Calendar Hours'
+    }
+    df_oh = df_oh.rename(columns=col_map_oh)
+    
+    # Kalo Calendar Hours ga ada, bikin default 24 jam per hari
+    if 'Calendar Hours' not in df_oh.columns:
+        df_oh['Calendar Hours'] = 24
+        st.info("Kolom 'Calendar Hours' ga ada, otomatis diisi 24 jam/hari")
+    
+    # Validasi kolom wajib - Calendar Hours udah nggak wajib
+    wajib = ['Tanggal', 'Unit', 'Operating Hours']
+    hilang = [k for k in wajib if k not in df_oh.columns]
+    if hilang:
+        st.error(f"Kolom wajib Timesheet nggak ada: {hilang}")
+        st.write("Kolom yg kebaca:", list(df_oh.columns))
+    else:
+        df_oh = df_oh.dropna(subset=['Tanggal', 'Unit'])
+        df_oh['Tanggal'] = pd.to_datetime(df_oh['Tanggal'], dayfirst=True, errors='coerce')
+        df_oh['Operating Hours'] = pd.to_numeric(df_oh['Operating Hours'], errors='coerce').fillna(0)
+        df_oh['Calendar Hours'] = pd.to_numeric(df_oh['Calendar Hours'], errors='coerce').fillna(24)
+        st.session_state['df_oh'] = df_oh
+        st.success(f"Timesheet OK! {len(df_oh)} baris loaded")
 
 # ==================== DASHBOARD UTAMA ====================
 df_bd = st.session_state.get('df_bd', pd.DataFrame())
