@@ -55,18 +55,40 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 KPI", "🛢️ Lube", "🔧 
 
 with tab1:
     st.subheader(f"KPI Bulan: {periode_pilih}")
-    oh = df_oh_f['Operating Hours'].sum()
-    ch = df_oh_f['Calendar Hours'].sum()
-    bh = df_bd_f['Downtime'].sum()
-    freq_bd = len(df_bd_f)
-    mar = oh/ch*100 if ch>0 else 0
-    mttr = bh/freq_bd if freq_bd>0 else 0
-    mtbf = oh/freq_bd if freq_bd>0 else 0
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("MAR", f"{mar:.1f}%")
-    c2.metric("MTTR", f"{mttr:.1f} jam")
-    c3.metric("MTBF", f"{mtbf:.1f} jam")
-    c4.metric("Total BD", f"{freq_bd} kali")
+    
+    # CEK DULU DATANYA ADA ATAU KOSONG
+    if df_oh_f.empty or df_bd_f.empty:
+        st.warning("⚠️ Upload file Timesheet + Daily BD dulu bro, baru KPI muncul")
+    else:
+        # HITUNG KPI DARI 2 FILE
+        oh = df_oh_f['Operating Hours'].sum()
+        ch = df_oh_f['Calendar Hours'].sum()
+        bh = df_bd_f['Downtime'].sum()
+        freq_bd = len(df_bd_f)
+        
+        mar = oh/ch*100 if ch>0 else 0
+        mttr = bh/freq_bd if freq_bd>0 else 0
+        mtbf = oh/freq_bd if freq_bd>0 else 0
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("MAR", f"{mar:.1f}%", delta=f"{mar-90:.1f}%" if mar else None)
+        c2.metric("MTTR", f"{mttr:.1f} jam", help="Breakdown Hours / Frekuensi")
+        c3.metric("MTBF", f"{mtbf:.1f} jam", help="Operating Hours / Frekuensi")
+        c4.metric("Total BD", f"{freq_bd} kali")
+        
+        st.divider()
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Operating Hours", f"{oh:,.1f} jam")
+        c2.metric("Calendar Hours", f"{ch:,.1f} jam")
+        c3.metric("Breakdown Hours", f"{bh:,.1f} jam")
+
+        # TOP 5 KOMPONEN
+        if 'Komponen' in df_bd_f.columns:
+            st.subheader("Top 5 Komponen Biang Kerok")
+            top_komp = df_bd_f.groupby('Komponen')['Downtime'].sum().nlargest(5).reset_index()
+            fig = px.bar(top_komp, x='Downtime', y='Komponen', orientation='h', text_auto='.1f')
+            fig.update_layout(yaxis={'categoryorder':'total ascending'})
+            st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
     st.subheader("🛢️ Lube Consumption")
