@@ -21,25 +21,54 @@ df_oh = pd.DataFrame()
 
 # BACA FILE DAILY BD
 if file_bd: 
-    df_bd = pd.read_excel(file_bd)
+    # Coba baca, skip 1 baris dulu. Kalo masih Unnamed, skip 2 baris
+    for skip in [0, 1, 2, 3]:
+        df_bd = pd.read_excel(file_bd, skiprows=skip)
+        # Kalo udah ketemu kolom 'UNIT NO' berarti headernya bener
+        if 'UNIT NO' in df_bd.columns or 'Unit No' in df_bd.columns or 'Unit' in df_bd.columns:
+            st.success(f"Header Daily BD ketemu di baris ke-{skip+1}")
+            break
+    else:
+        st.error("Header Daily BD nggak ketemu. Cek file Excel lu bro")
+        st.stop()
     
-    # 1. Bersihin semua nama kolom: hapus spasi, lowercase
+    # Bersihin nama kolom
     df_bd.columns = df_bd.columns.str.strip().str.upper()
     
-    # 2. Bikin mapping biar fleksibel nama kolomnya
+    # Mapping biar fleksibel
     col_map = {
-        'UNIT NO':'Unit',
-        'TOTAL BD':'Downtime', 
-        'COMPONEN':'Komponen',
-        'COMPONENT':'Komponen',
+        'UNIT NO':'Unit', 'UNIT':'Unit', 'NO UNIT':'Unit',
+        'TOTAL BD':'Downtime', 'BD':'Downtime',
+        'COMPONEN':'Komponen', 'COMPONENT':'Komponen',
         'STATUS BREAKDOWN':'Status_BD',
-        'CODE BD':'Kode_BD',
-        'DATE IN':'DateIn',
-        'TIME IN':'TimeIn',
-        'DATE OUT':'DateOut',
-        'TIME OUT':'TimeOut'
+        'CODE BD':'Kode_BD', 'KODE BD':'Kode_BD',
+        'DATE IN':'DateIn', 'TGL MASUK':'DateIn',
+        'TIME IN':'TimeIn', 'JAM MASUK':'TimeIn',
+        'DATE OUT':'DateOut', 'TGL KELUAR':'DateOut',
+        'TIME OUT':'TimeOut', 'JAM KELUAR':'TimeOut'
     }
     df_bd = df_bd.rename(columns=col_map)
+    
+    # Cek kolom wajib
+    kolom_wajib = ['DateIn', 'TimeIn', 'DateOut', 'TimeOut', 'Unit', 'Downtime']
+    kolom_hilang = [k for k in kolom_wajib if k not in df_bd.columns]
+    
+    if kolom_hilang:
+        st.error(f"Kolom ini nggak ketemu di Daily BD: {kolom_hilang}")
+        st.write("Nama kolom yg kebaca:", list(df_bd.columns))
+        st.stop()
+    
+    # Baru bikin Start Job & Finish Job
+    df_bd['Start Job'] = pd.to_datetime(
+        df_bd['DateIn'].astype(str) + ' ' + df_bd['TimeIn'].astype(str),
+        dayfirst=True, errors='coerce'
+    )
+    df_bd['Finish Job'] = pd.to_datetime(
+        df_bd['DateOut'].astype(str) + ' ' + df_bd['TimeOut'].astype(str),
+        dayfirst=True, errors='coerce'
+    )
+    df_bd['Downtime'] = pd.to_numeric(df_bd['Downtime'], errors='coerce').fillna(0)
+    df_bd = df_bd.dropna(subset=['Unit', 'Start Job'])
     
     # 3. Cek kolom wajib ada apa nggak
     kolom_wajib = ['DateIn', 'TimeIn', 'DateOut', 'TimeOut', 'Unit', 'Downtime']
