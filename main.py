@@ -22,10 +22,43 @@ df_oh = pd.DataFrame()
 # BACA FILE DAILY BD
 if file_bd: 
     df_bd = pd.read_excel(file_bd)
-    df_bd.columns = df_bd.columns.str.strip()
-    df_bd = df_bd.rename(columns={'UNIT NO':'Unit','Total BD':'Downtime','Componen':'Komponen','Status Breakdown':'Status_BD'})
-    df_bd['Start Job'] = pd.to_datetime(df_bd['Date In'].astype(str) + ' ' + df_bd['Time In'].astype(str), dayfirst=True, errors='coerce')
-    df_bd['Finish Job'] = pd.to_datetime(df_bd['Date Out'].astype(str) + ' ' + df_bd['Time Out'].astype(str), dayfirst=True, errors='coerce')
+    
+    # 1. Bersihin semua nama kolom: hapus spasi, lowercase
+    df_bd.columns = df_bd.columns.str.strip().str.upper()
+    
+    # 2. Bikin mapping biar fleksibel nama kolomnya
+    col_map = {
+        'UNIT NO':'Unit',
+        'TOTAL BD':'Downtime', 
+        'COMPONEN':'Komponen',
+        'COMPONENT':'Komponen',
+        'STATUS BREAKDOWN':'Status_BD',
+        'CODE BD':'Kode_BD',
+        'DATE IN':'DateIn',
+        'TIME IN':'TimeIn',
+        'DATE OUT':'DateOut',
+        'TIME OUT':'TimeOut'
+    }
+    df_bd = df_bd.rename(columns=col_map)
+    
+    # 3. Cek kolom wajib ada apa nggak
+    kolom_wajib = ['DateIn', 'TimeIn', 'DateOut', 'TimeOut', 'Unit', 'Downtime']
+    kolom_hilang = [k for k in kolom_wajib if k not in df_bd.columns]
+    
+    if kolom_hilang:
+        st.error(f"Kolom ini nggak ketemu di Daily BD: {kolom_hilang}")
+        st.write("Nama kolom yg kebaca:", list(df_bd.columns))
+        st.stop()
+    
+    # 4. Baru bikin Start Job & Finish Job
+    df_bd['Start Job'] = pd.to_datetime(
+        df_bd['DateIn'].astype(str) + ' ' + df_bd['TimeIn'].astype(str),
+        dayfirst=True, errors='coerce'
+    )
+    df_bd['Finish Job'] = pd.to_datetime(
+        df_bd['DateOut'].astype(str) + ' ' + df_bd['TimeOut'].astype(str),
+        dayfirst=True, errors='coerce'
+    )
     df_bd['Downtime'] = pd.to_numeric(df_bd['Downtime'], errors='coerce').fillna(0)
 
 # BACA FILE TIMESHEET
