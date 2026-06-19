@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import io
 
-st.set_page_config(page_title="Mine Planner God-Tier", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="Mine Planner God-Tier", page_icon="🛠️", layout="wide")
 
 st.markdown("""
 <style>
@@ -25,7 +25,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("⚙️ Mine Planner God-Tier Dashboard")
+st.title("🛠️ Mine Planner God-Tier Dashboard")
 st.caption("MAR | MTTR | MTBF | PICA | Akurasi Service → Auto dari Excel mentah")
 
 with st.sidebar:
