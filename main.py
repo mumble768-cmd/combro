@@ -29,7 +29,7 @@ st.title("⚙️ Mine Planner God-Tier Dashboard")
 st.caption("MAR | MTTR | MTBF | PICA | Akurasi Service → Auto dari Excel mentah")
 
 with st.sidebar:
-    st.image("https://imgur.com/TGUD5Jh", width=80)
+    st.image("logo.png", width=80)
     st.header("📁 Data Input")
     bd_file = st.file_uploader("1. Upload Daily BD Excel", type=["xlsx"])
     oh_file = st.file_uploader("2. Upload Calendar & OH Excel", type=["xlsx"], help="Wajib buat hitung MAR/MTBF")
