@@ -1,67 +1,48 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
 st.set_page_config(page_title="Mine KPI Dashboard", layout="wide")
-st.title("MINE KPI DASHBOARD - VERSI BARBAR")
+st.title("MINE KPI DASHBOARD")
 
-@st.cache_data
-def load_data(file):
-    # Coba baca header di baris 0 sampe 5
-    for i in range(6):
-        try:
-            df = pd.read_excel(file, header=i)
-            if 'UNIT' in str(df.columns).upper():
-                break
-        except:
-            continue
+st.sidebar.header("1. Upload File Excel")
+file = st.file_uploader("Upload file KPI", type=["xlsx"])
 
+if file:
+    # BACANYA PAKSA DARI BARIS 0
+    df = pd.read_excel(file, header=0)
     df.columns = df.columns.str.strip()
     df = df.dropna(how='all')
 
-    # Convert semua ke angka kalau bisa
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='ignore')
+    st.success(f"Berhasil load: {df.shape[0]} baris")
 
-    # HITUNG KPI BARBAR
-    try:
-        if 'PA' not in df.columns:
-            df['PA'] = (df['WH'] / df['MOHH']) * 100
-    except: pass
-    try:
-        if 'UA' not in df.columns:
-            df['UA'] = ((df['WH'] - df['TOTAL BD']) / df['WH']) * 100
-    except: pass
-    try:
-        if 'MA' not in df.columns:
-            df['MA'] = ((df['WH'] - df['TOTAL BD']) / df['WH']) * 100
-    except: pass
-    try:
-        if 'MTTR' not in df.columns:
-            df['MTTR'] = df['TOTAL BD'] / df['REPAIR TOTAL']
-    except: pass
-    try:
-        if 'MTBF' not in df.columns:
-            df['MTBF'] = df['WH'] / df['REPAIR TOTAL']
-    except: pass
+    st.sidebar.header("2. Pilih Kolom KPI")
+    cols = df.columns.tolist()
 
-    return df
+    col_pa = st.sidebar.selectbox("Pilih Kolom PA", ["-"] + cols)
+    col_ma = st.sidebar.selectbox("Pilih Kolom MA", ["-"] + cols)
+    col_ua = st.sidebar.selectbox("Pilih Kolom UA", ["-"] + cols)
+    col_mohh = st.sidebar.selectbox("Pilih Kolom MOHH", ["-"] + cols)
+    col_wh = st.sidebar.selectbox("Pilih Kolom WH", ["-"] + cols)
+    col_bd = st.sidebar.selectbox("Pilih Kolom BD/Downtime", ["-"] + cols)
 
-with st.sidebar:
-    st.header("Upload")
-    file = st.file_uploader("Upload Excel KPI", type=["xlsx"])
+    # Convert ke angka yg dipilih aja
+    for c in [col_pa, col_ma, col_ua, col_mohh, col_wh, col_bd]:
+        if c!= "-":
+            df[c] = pd.to_numeric(df[c], errors='coerce') # UDAH BENER
 
-if file:
-    df = load_data(file)
-    st.success(f"Data ke-load: {df.shape[0]} baris, {df.shape[1]} kolom")
+    st.header("3. TABEL DATA")
+    show_cols = [c for c in [col_pa, col_ma, col_ua, col_mohh, col_wh, col_bd] if c!= "-"]
 
-    st.header("SEMUA DATA")
-    st.dataframe(df, use_container_width=True, height=600)
+    if show_cols:
+        st.dataframe(df[show_cols], use_container_width=True)
+    else:
+        st.dataframe(df, use_container_width=True)
 
-    st.header("KOLOM YANG TERDETEKSI")
-    st.write(df.columns.tolist())
-
-    st.download_button("Download CSV", df.to_csv(index=False), "Laporan.csv")
+    st.header("4. RINGKASAN")
+    k1,k2,k3 = st.columns(3)
+    if col_pa!= "-": k1.metric("Rata2 PA", f"{df[col_pa].mean():.2f}%")
+    if col_ma!= "-": k2.metric("Rata2 MA", f"{df[col_ma].mean():.2f}%")
+    if col_ua!= "-": k3.metric("Rata2 UA", f"{df[col_ua].mean():.2f}%")
 
 else:
-    st.info("Upload file Excel lu")
+    st.info("Silahkan upload file Excel KPI di sidebar")
