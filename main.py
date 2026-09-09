@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 
 st.set_page_config(page_title="Mine KPI Dashboard", page_icon="⛏️", layout="wide")
-st.title("⛏️ MINE KPI DASHBOARD - FINAL BOSS")
+st.title("⛏️ MINE KPI DASHBOARD - GOD TIER")
 
 @st.cache_data
 def load_data(file):
@@ -21,17 +22,17 @@ def load_data(file):
     for col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # Auto hitung KPI
+    # Auto hitung KPI biar lengkap
     if 'PA' not in df.columns and 'MOHH' in df.columns and 'WH' in df.columns:
-        df['PA'] = (df['WH'] / df['MOHH']) * 100
+        df['PA'] = np.where(df['MOHH']>0, (df['WH'] / df['MOHH']) * 100, 0)
     if 'UA' not in df.columns and 'WH' in df.columns and 'TOTAL BD' in df.columns:
-        df['UA'] = ((df['WH'] - df['TOTAL BD']) / df['WH']) * 100
+        df['UA'] = np.where(df['WH']>0, ((df['WH'] - df['TOTAL BD']) / df['WH']) * 100, 0)
     if 'MA' not in df.columns and 'WH' in df.columns and 'TOTAL BD' in df.columns:
-        df['MA'] = ((df['WH'] - df['TOTAL BD']) / df['WH']) * 100
+        df['MA'] = np.where(df['WH']>0, ((df['WH'] - df['TOTAL BD']) / df['WH']) * 100, 0)
     if 'MTTR' not in df.columns and 'TOTAL BD' in df.columns and 'REPAIR TOTAL' in df.columns:
-        df['MTTR'] = df['TOTAL BD'] / df['REPAIR TOTAL']
+        df['MTTR'] = np.where(df['REPAIR TOTAL']>0, df['TOTAL BD'] / df['REPAIR TOTAL'], 0)
     if 'MTBF' not in df.columns and 'WH' in df.columns and 'REPAIR TOTAL' in df.columns:
-        df['MTBF'] = df['WH'] / df['REPAIR TOTAL']
+        df['MTBF'] = np.where(df['REPAIR TOTAL']>0, df['WH'] / df['REPAIR TOTAL'], 0)
     return df
 
 with st.sidebar:
@@ -43,7 +44,6 @@ if file:
     st.success(f"✅ Data ke-load: {df.shape[0]} Unit")
 
     st.sidebar.header("📅 Filter")
-    # UDAH DIBENERIN PAKE DROPNA
     owners = st.sidebar.multiselect("Owner", df['UNIT OWNER'].dropna().unique().tolist(), default=df['UNIT OWNER'].dropna().unique().tolist())
     types = st.sidebar.multiselect("Type", df['UNIT TYPE'].dropna().unique().tolist(), default=df['UNIT TYPE'].dropna().unique().tolist())
     units = st.sidebar.multiselect("Unit No", df['UNIT NO'].dropna().unique().tolist(), default=df['UNIT NO'].dropna().unique().tolist())
@@ -67,12 +67,13 @@ if file:
     show_cols = [c for c in show_cols if c in df_f.columns]
 
     def color_bad(val):
-        if isinstance(val, (int, float)):
+        if isinstance(val, (int, float)) and not pd.isna(val):
             if val < 80: return 'background-color: #FF4B4B; color: white'
             if val < 90: return 'background-color: #FFA500; color: white'
         return ''
 
-    st.dataframe(df_f[show_cols].style.format("{:.2f}").applymap(color_bad, subset=['PA','MA','UA']), use_container_width=True, height=500)
+    # UDAH DIBENERIN PAKE.map()
+    st.dataframe(df_f[show_cols].style.format("{:.2f}").map(color_bad, subset=[c for c in ['PA','MA','UA'] if c in show_cols]), use_container_width=True, height=500)
 
     st.download_button("📥 Download Laporan", df_f[show_cols].to_csv(index=False), "Laporan_KPI.csv")
 
