@@ -4,7 +4,7 @@ import plotly.express as px
 import numpy as np
 import re
 
-st.set_page_config(page_title="Mine KPI Dashboard", layout="wide") # UDAH GUE BUANG ICON
+st.set_page_config(page_title="Mine KPI Dashboard", layout="wide")
 st.title("MINE KPI DASHBOARD")
 
 def find_col(df, keywords):
@@ -30,7 +30,6 @@ def load_data(file):
     for col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # AUTO CARI KOLOM
     col_owner = find_col(df, ['unitowner', 'owner'])
     col_unit = find_col(df, ['unitno', 'unit'])
     col_type = find_col(df, ['unittype', 'type'])
@@ -42,15 +41,15 @@ def load_data(file):
     col_ma = find_col(df, ['ma'])
     col_ua = find_col(df, ['ua'])
 
-    # HITUNG OTOMATIS KALAU KOSONG
+    # UDAH GUE BENERIN KUTIPNYA
     if col_pa is None and col_wh and col_mohh:
-        df['PA'] = np.where(df[col_mohh]>0, (df[col_wh] / df[col_mohh']) * 100, 0)
+        df['PA'] = np.where(df[col_mohh]>0, (df[col_wh] / df[col_mohh]) * 100, 0)
         col_pa = 'PA'
     if col_ua is None and col_wh and col_bd:
-        df['UA'] = np.where(df[col_wh]>0, ((df[col_wh] - df[col_bd]) / df[col_wh']) * 100, 0)
+        df['UA'] = np.where(df[col_wh]>0, ((df[col_wh] - df[col_bd]) / df[col_wh]) * 100, 0)
         col_ua = 'UA'
     if col_ma is None and col_wh and col_bd:
-        df['MA'] = np.where(df[col_wh]>0, ((df[col_wh] - df[col_bd]) / df[col_wh']) * 100, 0)
+        df['MA'] = np.where(df[col_wh]>0, ((df[col_wh] - df[col_bd]) / df[col_wh]) * 100, 0)
         col_ma = 'MA'
     if 'MTTR' not in df.columns and col_bd and col_repair:
         df['MTTR'] = np.where(df[col_repair]>0, df[col_bd] / df[col_repair], 0)
@@ -96,4 +95,3 @@ if file:
 
 else:
     st.info("Upload file Excel KPI lu di sidebar")
-    
