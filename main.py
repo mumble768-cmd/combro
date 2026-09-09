@@ -8,7 +8,6 @@ st.sidebar.header("1. Upload File Excel")
 file = st.file_uploader("Upload file KPI", type=["xlsx"])
 
 if file:
-    # BACANYA PAKSA DARI BARIS 0
     df = pd.read_excel(file, header=0)
     df.columns = df.columns.str.strip()
     df = df.dropna(how='all')
@@ -25,16 +24,27 @@ if file:
     col_wh = st.sidebar.selectbox("Pilih Kolom WH", ["-"] + cols)
     col_bd = st.sidebar.selectbox("Pilih Kolom BD/Downtime", ["-"] + cols)
 
-    # Convert ke angka yg dipilih aja
+    # Convert ke angka + AUTO KALIKAN 100 KALAU KOLOM PERSEN
+    persen_cols = [col_pa, col_ma, col_ua]
     for c in [col_pa, col_ma, col_ua, col_mohh, col_wh, col_bd]:
         if c!= "-":
-            df[c] = pd.to_numeric(df[c], errors='coerce') # UDAH BENER
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+            # Kalau namanya ada PA/MA/UA atau nilainya < 2, berarti desimal. Kalikan 100
+            if c in persen_cols and df[c].max() < 2:
+                df[c] = df[c] * 100
 
     st.header("3. TABEL DATA")
     show_cols = [c for c in [col_pa, col_ma, col_ua, col_mohh, col_wh, col_bd] if c!= "-"]
 
     if show_cols:
-        st.dataframe(df[show_cols], use_container_width=True)
+        # FORMAT JADI 2 DESIMAL + % BUAT PA MA UA
+        format_dict = {}
+        for c in persen_cols:
+            if c in show_cols: format_dict[c] = "{:.2f}%"
+        for c in [col_mohh, col_wh, col_bd]:
+            if c in show_cols: format_dict[c] = "{:.1f}"
+
+        st.dataframe(df[show_cols].style.format(format_dict), use_container_width=True)
     else:
         st.dataframe(df, use_container_width=True)
 
