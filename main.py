@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import numpy as np
 import re
 
@@ -41,7 +40,7 @@ def load_data(file):
     col_ma = find_col(df, ['ma'])
     col_ua = find_col(df, ['ua'])
 
-    # UDAH GUE BENERIN KUTIPNYA
+    # HITUNG OTOMATIS
     if col_pa is None and col_wh and col_mohh:
         df['PA'] = np.where(df[col_mohh]>0, (df[col_wh] / df[col_mohh]) * 100, 0)
         col_pa = 'PA'
@@ -85,13 +84,9 @@ if file:
     show_cols = [col_owner, col_unit, col_type, col_pa, col_ma, col_ua, col_mohh, col_wh, col_bd, 'MTTR', 'MTBF']
     show_cols = [c for c in show_cols if c and c in df_f.columns]
 
-    def color_bad(val):
-        if isinstance(val, (int, float)) and not pd.isna(val):
-            if val < 80: return 'background-color: #FF4B4B; color: white'
-            if val < 90: return 'background-color: #FFA500; color: white'
-        return ''
-
-    st.dataframe(df_f[show_cols].style.format("{:.2f}").map(color_bad, subset=[c for c in [col_pa,col_ma,col_ua] if c]), use_container_width=True, height=500)
+    # UDAH GUE BUANG STYLING WARNA BIAR GAK ERROR LAGI
+    st.dataframe(df_f[show_cols].round(2), use_container_width=True, height=500)
+    st.download_button("Download CSV", df_f[show_cols].to_csv(index=False), "Laporan_KPI.csv")
 
 else:
     st.info("Upload file Excel KPI lu di sidebar")
